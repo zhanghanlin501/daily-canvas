@@ -1,0 +1,32 @@
+# FastAPI - 现代 Python Web 框架
+# 文档：https://fastapi.tiangolo.com/
+fastapi==0.104.1
+
+# Uvicorn - ASGI 服务器
+# 用于运行 FastAPI 应用
+uvicorn[standard]==0.24.0
+
+# SQLAlchemy - Python ORM
+# 文档：https://docs.sqlalchemy.org/
+sqlalchemy==2.0.23
+
+# Psycopg2 - PostgreSQL 数据库驱动
+psycopg2-binary==2.9.9
+
+# Pydantic - 数据验证
+# 文档：https://docs.pydantic.dev/
+pydantic[email]==2.5.2
+# Pydantic Settings - 用于管理应用配置
+pydantic-settings==2.0.3
+
+# Python-JOSE - JWT Token 处理
+python-jose[cryptography]==3.3.0
+
+# PassLib - 密码哈希
+passlib[bcrypt]==1.7.4
+
+# Python-multipart - 表单数据解析（用于 OAuth2）
+python-multipart==0.0.6
+
+# 环境变量管理
+python-dotenv==1.0.0
