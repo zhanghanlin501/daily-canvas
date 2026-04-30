@@ -25,7 +25,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/daily_canvas
       - SECRET_KEY=your-secret-key-change-in-production
-      - CORS_ORIGINS=http://localhost:8080,http://localhost:3000,http://localhost:5173
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8080,http://localhost:3000,http://localhost:5173,http://localhost,https://localhost}
     expose:
       - "8000"
 
