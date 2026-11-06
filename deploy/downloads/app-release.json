@@ -12,8 +12,8 @@
     "登录改为短效令牌自动续期，不再频繁掉线；更新安装失败会给出中文原因"
   ],
   "apkPath": "/downloads/daily-canvas-1.1.0.apk",
-  "sha256": "d0733f0b8563873c83a576a5c2c327031af3f594cb32d11555ae3835d34516b3",
+  "sha256": "a25b742e91c54de63d3f9127cb758c9fbbe032333468ed8ee786bc7dda6783fe",
   "size": 3209222,
   "forceUpdate": false,
-  "publishedAt": "2026-11-06T09:59:32Z"
+  "publishedAt": "2026-11-06T11:48:19Z"
 }
