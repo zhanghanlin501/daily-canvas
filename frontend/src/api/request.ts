@@ -1,25 +1,36 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios'
+import { invalidateRuntimeConfig, resolveApiBaseUrl } from '../config/runtimeConfig'
+import {
+  type AuthTokenPair,
+  clearAuthTokens,
+  getAccessToken,
+  getRefreshToken,
+  storeAuthTokens,
+} from './tokenStorage'
 
-const rawApiBaseUrl =
-  (import.meta as any).env?.VITE_API_BASE_URL ||
-  (import.meta as any).env?.VITE_API_URL ||
-  ''
+export const AUTH_UNAUTHORIZED_EVENT = 'daily-canvas:auth-unauthorized'
 
-const normalizedApiBaseUrl = rawApiBaseUrl.replace(/\/+$/, '')
-const isHttpOrigin =
-  typeof window !== 'undefined' &&
-  ['http:', 'https:'].includes(window.location.protocol)
-
-const API_BASE_URL = normalizedApiBaseUrl || '/api'
-
-if (!normalizedApiBaseUrl && typeof window !== 'undefined' && !isHttpOrigin) {
-  console.warn(
-    '当前运行环境不是 http/https，且未设置 VITE_API_BASE_URL。Android 真机请配置公网 API 地址。'
-  )
+/**
+ * 带状态码的请求错误。
+ * 拦截器把 axios 错误统一成 Error，同时保留 HTTP 状态码与「网络不可达」标记，
+ * 让调用方能区分「网络断了」「服务器出错」「业务校验失败」。
+ */
+export interface ApiRequestError extends Error {
+  status?: number
+  isNetworkError?: boolean
+  isTimeout?: boolean
 }
 
+const AUTH_ENDPOINTS = ['/auth/login', '/auth/register', '/auth/refresh', '/auth/logout']
+
+interface RetryableRequestConfig extends InternalAxiosRequestConfig {
+  _retry?: boolean
+}
+
+let refreshPromise: Promise<string | null> | null = null
+
 const api: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: '/api',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -71,9 +82,49 @@ function extractErrorMessage(data: unknown): string | null {
   return null
 }
 
+async function requestNewAccessToken(): Promise<string | null> {
+  const refreshToken = getRefreshToken()
+  if (!refreshToken) {
+    return null
+  }
+
+  try {
+    const baseURL = await resolveApiBaseUrl()
+    const response = await axios.post<AuthTokenPair>(
+      `${baseURL}/auth/refresh`,
+      { refresh_token: refreshToken },
+      {
+        timeout: 10000,
+        headers: { 'Content-Type': 'application/json' },
+      },
+    )
+
+    storeAuthTokens(response.data)
+    return response.data.access_token
+  } catch {
+    clearAuthTokens()
+    return null
+  }
+}
+
+function refreshAccessToken(): Promise<string | null> {
+  if (!refreshPromise) {
+    refreshPromise = requestNewAccessToken().finally(() => {
+      refreshPromise = null
+    })
+  }
+
+  return refreshPromise
+}
+
 api.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem('access_token')
+  async (config: InternalAxiosRequestConfig) => {
+    const token = getAccessToken()
+    const isAbsoluteUrl = !!config.url && /^https?:\/\//i.test(config.url)
+
+    if (!isAbsoluteUrl) {
+      config.baseURL = await resolveApiBaseUrl()
+    }
 
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`
@@ -90,10 +141,29 @@ api.interceptors.response.use(
   (response) => {
     return response
   },
-  (error: AxiosError) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('access_token')
-      window.location.href = '/login'
+  async (error: AxiosError) => {
+    const requestUrl = error.config?.url || ''
+    const isAuthRequest = AUTH_ENDPOINTS.some((endpoint) => requestUrl.endsWith(endpoint))
+    const originalRequest = error.config as RetryableRequestConfig | undefined
+
+    if (error.response?.status === 401 && !isAuthRequest) {
+      if (originalRequest && !originalRequest._retry) {
+        originalRequest._retry = true
+        const accessToken = await refreshAccessToken()
+
+        if (accessToken) {
+          if (!originalRequest.headers) {
+            originalRequest.headers = {} as InternalAxiosRequestConfig['headers']
+          }
+          originalRequest.headers.Authorization = `Bearer ${accessToken}`
+          return api.request(originalRequest)
+        }
+      }
+
+      clearAuthTokens()
+      if (typeof window !== 'undefined' && !requestUrl.endsWith('/auth/logout')) {
+        window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT))
+      }
     }
 
     const errorMessage =
@@ -101,7 +171,17 @@ api.interceptors.response.use(
       error.message ||
       '请求失败'
 
-    return Promise.reject(new Error(errorMessage))
+    const requestError: ApiRequestError = new Error(errorMessage)
+    requestError.status = error.response?.status
+    requestError.isNetworkError = !error.response
+    requestError.isTimeout = error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT'
+
+    // 网络不可达往往意味着隧道地址已经变了：丢掉缓存的地址，下次请求重新解析
+    if (requestError.isNetworkError || requestError.isTimeout) {
+      invalidateRuntimeConfig()
+    }
+
+    return Promise.reject(requestError)
   }
 )
 

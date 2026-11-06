@@ -4,36 +4,47 @@
  */
 
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { useAuth } from '../hooks/useAuth'
 import { login } from '../api/auth'
+import { storeAuthTokens } from '../api/tokenStorage'
 import type { LoginParams } from '../types'
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { setUser } = useAuth()
   const [errorMessage, setErrorMessage] = useState('')
+  const from = (location.state as { from?: { pathname?: string; search?: string; hash?: string } } | null)?.from
+  const registeredState = location.state as
+    | { registered?: boolean; email?: string }
+    | null
+  const redirectTo = from?.pathname
+    ? `${from.pathname}${from.search || ''}${from.hash || ''}`
+    : '/'
 
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<LoginParams>()
+  } = useForm<LoginParams>({
+    defaultValues: { email: registeredState?.email || '' },
+  })
 
   async function onSubmit(data: LoginParams) {
     try {
       setErrorMessage('')
       const response = await login(data)
 
-      // 保存 token 到本地存储
-      localStorage.setItem('access_token', response.access_token)
+      // 保存短效访问令牌与长效刷新令牌
+      storeAuthTokens(response)
 
       // 更新全局用户状态
       setUser(response.user)
 
       // 跳转到首页
-      navigate('/')
+      navigate(redirectTo, { replace: true })
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '登录失败')
     }
@@ -52,6 +63,13 @@ export default function LoginPage() {
 
         {/* 登录表单 */}
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {/* 注册成功但自动登录失败：账号已经建好，只需手动登录一次 */}
+          {registeredState?.registered && !errorMessage && (
+            <div className="p-3 bg-green-50 text-green-700 text-sm rounded-lg">
+              账号已创建成功，请输入密码登录
+            </div>
+          )}
+
           {/* 错误提示 */}
           {errorMessage && (
             <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg">

@@ -30,3 +30,6 @@ python-multipart==0.0.6
 
 # 环境变量管理
 python-dotenv==1.0.0
+
+# IANA 时区数据（Alpine 等精简镜像中 ZoneInfo 需要）
+tzdata==2024.1

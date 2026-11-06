@@ -1,0 +1,14 @@
+{
+  "versionName": "1.0.2",
+  "versionCode": 3,
+  "releaseNotes": [
+    "更换应用图标：墨黑底、米白一笔笔锋",
+    "更换启动页图标，与新版视觉统一",
+    "应用内更新体验优化"
+  ],
+  "apkPath": "/downloads/daily-canvas-1.0.2.apk",
+  "sha256": "3f79208ccb2529c75abe70cf9b274c4e580e3187bbeb8e8334ab2e76be89af5f",
+  "size": 3196138,
+  "forceUpdate": false,
+  "publishedAt": "2026-11-06T03:27:37Z"
+}

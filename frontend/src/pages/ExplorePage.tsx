@@ -3,15 +3,19 @@
  * 随机展示一条其他用户的创作，带来发现的乐趣
  */
 
+import { useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getRandomPost, getMoods } from '../api/posts'
 import PostCard from '../components/PostCard'
 import LoadingSpinner from '../components/LoadingSpinner'
 import type { Mood } from '../types'
+import { toRequestError } from '../utils/errors'
 
 export default function ExplorePage() {
   const navigate = useNavigate()
+  // 记录上一条，避免连续抽到同一条
+  const lastPostIdRef = useRef<number | undefined>(undefined)
 
   // 获取随机创作
   const {
@@ -19,10 +23,13 @@ export default function ExplorePage() {
     isLoading: isPostLoading,
     refetch: fetchRandom,
     isFetching,
+    error,
   } = useQuery({
     queryKey: ['randomPost'],
-    queryFn: getRandomPost,
-    enabled: false, // 需要手动触发
+    queryFn: () => getRandomPost(lastPostIdRef.current),
+    // 进入页面即抽一条，避免用户看到"还没有人发布创作"的误导文案
+    enabled: true,
+    retry: false,
   })
 
   // 获取情绪标签列表（用于显示颜色）
@@ -39,8 +46,11 @@ export default function ExplorePage() {
 
   // 获取下一个随机创作
   function handleNext() {
+    lastPostIdRef.current = post?.id
     fetchRandom()
   }
+
+  const noContent = !!error && toRequestError(error).status === 404
 
   return (
     <div className="min-h-screen bg-white">
@@ -90,10 +100,15 @@ export default function ExplorePage() {
             </div>
           )}
 
-          {/* 空状态 */}
+          {/* 空状态：区分"真的没有内容"与"请求失败" */}
           {!isPostLoading && !isFetching && !post && (
             <div className="text-center py-12">
-              <p className="text-gray-500 mb-4">还没有人发布创作</p>
+              <p className="text-gray-500 mb-4">
+                {noContent ? '暂时还没有可以探索的公开创作' : '这次没有抽到内容，再试一次吧'}
+              </p>
+              {!noContent && (
+                <p className="text-sm text-gray-400">{(error as Error)?.message}</p>
+              )}
             </div>
           )}
 

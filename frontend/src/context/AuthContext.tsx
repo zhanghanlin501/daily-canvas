@@ -11,7 +11,13 @@ import {
   ReactNode,
 } from 'react'
 import type { User } from '../types'
-import { getCurrentUser } from '../api/auth'
+import { getCurrentUser, revokeRefreshToken } from '../api/auth'
+import { AUTH_UNAUTHORIZED_EVENT } from '../api/request'
+import {
+  clearAuthTokens,
+  getAccessToken,
+  getRefreshToken,
+} from '../api/tokenStorage'
 
 /**
  * 认证上下文状态接口
@@ -46,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    */
   useEffect(() => {
     async function initAuth() {
-      const token = localStorage.getItem('access_token')
+      const token = getAccessToken()
 
       if (!token) {
         setIsLoading(false)
@@ -59,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(userData)
       } catch (error) {
         // token 无效或过期，清除本地存储
-        localStorage.removeItem('access_token')
+        clearAuthTokens()
       } finally {
         setIsLoading(false)
       }
@@ -68,13 +74,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initAuth()
   }, [])
 
+  // 接口返回 401 时只清理登录态，由路由组件决定是否需要跳转登录页。
+  useEffect(() => {
+    function handleUnauthorized() {
+      setUser(null)
+    }
+
+    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized)
+    return () => {
+      window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized)
+    }
+  }, [])
+
   /**
    * 登出函数
    * 清除用户状态和本地存储
    */
   function logout() {
+    const refreshToken = getRefreshToken()
     setUser(null)
-    localStorage.removeItem('access_token')
+    clearAuthTokens()
+
+    if (refreshToken) {
+      void revokeRefreshToken(refreshToken).catch(() => {
+        // 本地已登出，服务端注销失败不阻塞用户
+      })
+    }
   }
 
   // 计算是否已认证

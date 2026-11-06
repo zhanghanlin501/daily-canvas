@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy.orm import Session
 from app.database import engine, SessionLocal, Base
+from app.db_migrations import ensure_schema
 from app.models import Mood
 
 
@@ -54,6 +55,10 @@ def main():
     # 创建所有表
     Base.metadata.create_all(bind=engine)
     print("数据库表创建完成")
+
+    # 兼容已有数据库：补齐 post_date 与每日唯一约束
+    ensure_schema(engine)
+    print("数据库结构迁移完成")
 
     # 创建会话
     db = SessionLocal()

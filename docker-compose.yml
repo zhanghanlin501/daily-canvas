@@ -3,6 +3,9 @@ version: '3.8'
 services:
   db:
     image: postgres:13-alpine
+    ports:
+      # 只绑定本机，避免 PostgreSQL 直接暴露到局域网/公网
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -24,7 +27,24 @@ services:
         condition: service_healthy
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/daily_canvas
-      - SECRET_KEY=your-secret-key-change-in-production
+      # 空值也会被后端配置校验拒绝；这里保留空值是为了 docker compose ps/logs 仍可用
+      - SECRET_KEY=${SECRET_KEY:-}
+      - APP_ENV=${APP_ENV:-development}
+      - APP_TIMEZONE=${APP_TIMEZONE:-Asia/Shanghai}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-15}
+      - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS:-30}
+      # 登录暴力破解防护（进程内滑窗）
+      - LOGIN_MAX_FAILURES_PER_ACCOUNT=${LOGIN_MAX_FAILURES_PER_ACCOUNT:-8}
+      - LOGIN_MAX_FAILURES_PER_IP=${LOGIN_MAX_FAILURES_PER_IP:-200}
+      - LOGIN_WINDOW_SECONDS=${LOGIN_WINDOW_SECONDS:-900}
+      - LOGIN_LOCKOUT_SECONDS=${LOGIN_LOCKOUT_SECONDS:-900}
+      - LOGIN_IP_LOCKOUT_SECONDS=${LOGIN_IP_LOCKOUT_SECONDS:-300}
+      - REGISTER_MAX_ATTEMPTS_PER_IP=${REGISTER_MAX_ATTEMPTS_PER_IP:-60}
+      - REGISTER_WINDOW_SECONDS=${REGISTER_WINDOW_SECONDS:-3600}
+      - REGISTER_LOCKOUT_SECONDS=${REGISTER_LOCKOUT_SECONDS:-600}
+      # 管理端最小账号：两个都配置时才会在启动时创建/更新，未配置则不建账号
+      - STAFF_USERNAME=${STAFF_USERNAME:-}
+      - STAFF_PASSWORD=${STAFF_PASSWORD:-}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8080,http://localhost:3000,http://localhost:5173,http://localhost,https://localhost}
     expose:
       - "8000"
@@ -35,10 +55,26 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+        VITE_RUNTIME_CONFIG_URLS: ${VITE_RUNTIME_CONFIG_URLS:-https://gitee.com/zh_anghanlin/daily-canvas/raw/runtime-config/deploy/runtime-config.json,https://gitee.com/api/v5/repos/zh_anghanlin/daily-canvas/contents/deploy/runtime-config.json?ref=runtime-config}
     ports:
       - "8080:80"
+    volumes:
+      # 应用内更新的安装包与版本清单，由 ops/publish-android-release.sh 写入
+      - ./deploy/downloads:/usr/share/nginx/html/downloads:ro
     depends_on:
       - backend
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    command:
+      - tunnel
+      - --no-autoupdate
+      - --protocol
+      - http2
+      - --url
+      - http://frontend:80
+    depends_on:
+      - frontend
 
 volumes:
   postgres_data:

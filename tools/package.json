@@ -1,0 +1,12 @@
+{
+  "name": "daily-canvas-tools",
+  "private": true,
+  "description": "Daily Canvas 本地工具脚本（图标 / 启动图生成）",
+  "scripts": {
+    "icons:preview": "node render-app-icons.cjs --preview",
+    "icons": "node render-app-icons.cjs"
+  },
+  "devDependencies": {
+    "sharp": "^0.33.5"
+  }
+}

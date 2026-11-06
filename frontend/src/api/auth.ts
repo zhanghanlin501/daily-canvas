@@ -4,6 +4,7 @@
  */
 
 import api from './request'
+import { clearAuthTokens, type AuthTokenPair } from './tokenStorage'
 import type {
   User,
   RegisterParams,
@@ -12,10 +13,7 @@ import type {
   AuthResponse,
 } from '../types'
 
-interface LoginTokenPayload {
-  access_token: string
-  token_type: string
-}
+type LoginTokenPayload = AuthTokenPair
 
 /**
  * 用户注册
@@ -58,6 +56,13 @@ export async function login(params: LoginParams): Promise<LoginResponse> {
 }
 
 /**
+ * 注销长效刷新令牌；失败时由调用方忽略，本地 token 仍会被清除。
+ */
+export async function revokeRefreshToken(refreshToken: string): Promise<void> {
+  await api.post('/auth/logout', { refresh_token: refreshToken })
+}
+
+/**
  * 获取当前登录用户信息
  * 需要携带有效的 JWT Token
  * @returns 当前用户信息
@@ -72,5 +77,5 @@ export async function getCurrentUser(): Promise<User> {
  * 清除本地的 token
  */
 export function logout(): void {
-  localStorage.removeItem('access_token')
+  clearAuthTokens()
 }

@@ -1,0 +1,7 @@
+{
+  "publicBaseUrl": "https://example.trycloudflare.com",
+  "apiBaseUrl": "https://example.trycloudflare.com/api",
+  "healthUrl": "https://example.trycloudflare.com/api/health",
+  "source": "cloudflare-quick-tunnel",
+  "updatedAt": "2026-07-24T00:00:00Z"
+}

@@ -32,3 +32,14 @@ Thumbs.db
 # Database
 *.db
 *.sqlite3
+
+# Android 签名（切勿提交，泄露后可被伪造签名包覆盖安装）
+frontend/android/keystore.properties
+*.jks
+*.keystore
+*.p12
+*.pfx
+frontend/android/*.base64
+
+# 应用内更新下载目录（安装包不入库）
+deploy/downloads/*.apk

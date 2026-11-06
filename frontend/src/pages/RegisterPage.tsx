@@ -4,10 +4,11 @@
  */
 
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { useAuth } from '../hooks/useAuth'
 import { login, register as registerUser } from '../api/auth'
+import { storeAuthTokens } from '../api/tokenStorage'
 import type { RegisterParams } from '../types'
 
 interface RegisterFormValues extends RegisterParams {
@@ -16,8 +17,13 @@ interface RegisterFormValues extends RegisterParams {
 
 export default function RegisterPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { setUser } = useAuth()
   const [errorMessage, setErrorMessage] = useState('')
+  const from = (location.state as { from?: { pathname?: string; search?: string; hash?: string } } | null)?.from
+  const redirectTo = from?.pathname
+    ? `${from.pathname}${from.search || ''}${from.hash || ''}`
+    : '/'
 
   const {
     register,
@@ -30,30 +36,42 @@ export default function RegisterPage() {
   const password = watch('password')
 
   async function onSubmit(data: RegisterFormValues) {
+    setErrorMessage('')
+
     try {
-      setErrorMessage('')
       await registerUser({
         username: data.username,
         email: data.email,
         password: data.password,
       })
+    } catch (error) {
+      // 这一步才代表"注册失败"（邮箱/用户名已被占用等）
+      setErrorMessage(error instanceof Error ? error.message : '注册失败')
+      return
+    }
 
+    try {
       // 注册成功后自动登录
       const loginResponse = await login({
         email: data.email,
         password: data.password,
       })
 
-      // 保存 token 到本地存储
-      localStorage.setItem('access_token', loginResponse.access_token)
+      // 保存短效访问令牌与长效刷新令牌
+      storeAuthTokens(loginResponse)
 
       // 更新全局用户状态
       setUser(loginResponse.user)
 
       // 跳转到首页
-      navigate('/')
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : '注册失败')
+      navigate(redirectTo, { replace: true })
+    } catch {
+      // 账号已经建好了：自动登录失败时不能说"注册失败"，
+      // 否则用户会以为账号没创建，重试注册又会被告知"邮箱已被注册"，彻底卡死。
+      navigate('/login', {
+        replace: true,
+        state: { registered: true, email: data.email },
+      })
     }
   }
 

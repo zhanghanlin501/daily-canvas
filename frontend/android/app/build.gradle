@@ -1,5 +1,58 @@
 apply plugin: 'com.android.application'
 
+// ---------------------------------------------------------------------------
+// 版本号与签名配置
+//
+// 版本号优先取 Gradle 参数：-PappVersionName=1.1 -PappVersionCode=2
+// 签名信息优先取 android/keystore.properties（本地），其次取环境变量（CI）。
+// 只有用同一个签名打包，新版本才能直接覆盖安装旧版本。
+// ---------------------------------------------------------------------------
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+def keystoreProperties = new Properties()
+def hasKeystoreProperties = keystorePropertiesFile.exists()
+if (hasKeystoreProperties) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+def releaseStoreFilePath = hasKeystoreProperties
+        ? keystoreProperties['storeFile']
+        : System.getenv('ANDROID_KEYSTORE_PATH')
+def releaseStorePassword = hasKeystoreProperties
+        ? keystoreProperties['storePassword']
+        : System.getenv('ANDROID_KEYSTORE_PASSWORD')
+def releaseKeyAlias = hasKeystoreProperties
+        ? keystoreProperties['keyAlias']
+        : System.getenv('ANDROID_KEY_ALIAS')
+def releaseKeyPassword = hasKeystoreProperties
+        ? keystoreProperties['keyPassword']
+        : System.getenv('ANDROID_KEY_PASSWORD')
+def releaseStoreType = hasKeystoreProperties
+        ? keystoreProperties['storeType']
+        : System.getenv('ANDROID_KEYSTORE_TYPE')
+
+// 未显式指定时按扩展名推断：.p12/.pfx 视为 PKCS12，其余按 JKS
+def resolveStoreType = { String path, String explicitType ->
+    if (explicitType != null && !explicitType.toString().trim().isEmpty()) {
+        return explicitType.toString().trim().toUpperCase()
+    }
+
+    def lower = path == null ? '' : path.toString().toLowerCase()
+    return (lower.endsWith('.p12') || lower.endsWith('.pfx')) ? 'PKCS12' : 'JKS'
+}
+
+def hasReleaseSigning = releaseStoreFilePath != null
+        && !releaseStoreFilePath.toString().trim().isEmpty()
+        && releaseStorePassword != null
+        && releaseKeyAlias != null
+        && releaseKeyPassword != null
+
+def appVersionCode = (project.findProperty('appVersionCode')
+        ?: System.getenv('APP_VERSION_CODE')
+        ?: '1').toString().toInteger()
+def appVersionName = (project.findProperty('appVersionName')
+        ?: System.getenv('APP_VERSION_NAME')
+        ?: '1.0').toString()
+
 android {
     namespace = "com.dailycanvas.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +60,8 @@ android {
         applicationId "com.dailycanvas.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,10 +69,32 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile file(releaseStoreFilePath)
+                storeType resolveStoreType(releaseStoreFilePath, releaseStoreType)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            if (hasReleaseSigning) {
+                // 本地调试也使用同一签名，避免调试包与正式包签名不一致导致无法覆盖安装
+                signingConfig signingConfigs.release
+            }
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }

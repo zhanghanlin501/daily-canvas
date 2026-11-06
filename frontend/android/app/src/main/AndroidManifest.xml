@@ -37,4 +37,6 @@
     </application>
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 应用内更新需要的“安装未知应用”权限声明 -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 </manifest>
