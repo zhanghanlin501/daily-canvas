@@ -15,8 +15,10 @@ ANDROID_DIR="$ROOT_DIR/frontend/android"
 
 KEYSTORE_PATH="$ANDROID_DIR/daily-canvas-release.jks"
 KEYSTORE_ALIAS="daily-canvas"
-STORE_PASSWORD="dailycanvas"
-KEY_PASSWORD="dailycanvas"
+# 默认不写死密码：未显式传 --store-pass 时随机生成一个，
+# 避免出现「仓库里能查到默认密码」的情况。
+STORE_PASSWORD=""
+KEY_PASSWORD=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -34,6 +36,19 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ -z "$STORE_PASSWORD" ]]; then
+  if command -v openssl >/dev/null 2>&1; then
+    STORE_PASSWORD="$(openssl rand -hex 16)"
+  else
+    STORE_PASSWORD="$(LC_ALL=C tr -dc 'a-f0-9' </dev/urandom | head -c 32)"
+  fi
+fi
+
+# PKCS12 要求密钥口令与库口令一致；JKS 也统一用同一个口令，减少记混
+if [[ -z "$KEY_PASSWORD" ]]; then
+  KEY_PASSWORD="$STORE_PASSWORD"
+fi
 
 if [[ -f "$KEYSTORE_PATH" ]]; then
   echo "密钥库已存在：$KEYSTORE_PATH"
@@ -107,6 +122,10 @@ cat <<EOF
   - 本地配置：  $ANDROID_DIR/keystore.properties
   - CI 用 Base64：$BASE64_PATH
 
+密钥库口令（请立即存进密码管理器，丢失后无法再打包更新）：
+  storePassword = $STORE_PASSWORD
+  keyPassword   = $KEY_PASSWORD
+
 下一步（只需做一次）：
   1. 打开 GitHub 仓库 Settings → Secrets and variables → Actions
   2. 新增大写名称的 Secrets：
@@ -115,7 +134,8 @@ cat <<EOF
        ANDROID_KEY_ALIAS         ← $KEYSTORE_ALIAS
        ANDROID_KEY_PASSWORD      ← $KEY_PASSWORD
        ANDROID_KEYSTORE_TYPE     ← $STORE_TYPE
-  3. 把密钥库文件和 Base64 文件妥善备份，丢失后将无法覆盖更新已安装的 App
+  3. 把密钥库文件和 Base64 文件妥善备份（例如放一份到仓库之外的加密盘），
+     并单独保存上面的口令；丢失后无法覆盖更新已安装的 App
 
 注意：这两个文件和 keystore.properties 都已在 .gitignore 中，不要提交到仓库。
 EOF

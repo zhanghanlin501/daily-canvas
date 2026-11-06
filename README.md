@@ -352,7 +352,8 @@ App 内已经内置「关于 Daily Canvas」页面，可以查看当前版本、
 ops/gen-android-keystore.sh
 ```
 
-脚本会生成 `frontend/android/daily-canvas-release.jks`、本地配置 `frontend/android/keystore.properties`，以及供 CI 使用的 Base64 文件。然后在 GitHub 仓库 `Settings → Secrets and variables → Actions` 中添加：
+脚本会生成 `frontend/android/daily-canvas-release.jks`、本地配置 `frontend/android/keystore.properties`，以及供 CI 使用的 Base64 文件。
+未用 `--store-pass` 指定口令时，脚本会随机生成一个并打印出来，请立刻存进密码管理器——口令丢失同样会导致无法再打包更新。然后在 GitHub 仓库 `Settings → Secrets and variables → Actions` 中添加：
 
 | Secret | 说明 |
 | --- | --- |
